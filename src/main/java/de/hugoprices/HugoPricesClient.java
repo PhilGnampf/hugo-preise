@@ -48,6 +48,9 @@ public final class HugoPricesClient implements ClientModInitializer {
             }
             int[] counter = {0};
             ScreenEvents.afterTick(screen).register(s -> {
+                if (counter[0] == 20) {
+                    debugDump(container);
+                }
                 if (counter[0]++ % settings.scanEveryTicks == 0) {
                     scan(container);
                 }
@@ -56,6 +59,34 @@ public final class HugoPricesClient implements ClientModInitializer {
 
         // Tooltip: Preise anhängen.
         ItemTooltipCallback.EVENT.register((stack, context, flag, lines) -> addPriceLines(stack, lines));
+    }
+
+    private static final java.util.Set<String> DUMPED = new java.util.HashSet<>();
+
+    /** Schreibt Titel und Lore der ersten Menü-Items ins Log (einmal pro Titel), um Erkennung einzustellen. */
+    private static void debugDump(AbstractContainerScreen<?> screen) {
+        String title = screen.getTitle().getString();
+        if (!DUMPED.add(title)) {
+            return;
+        }
+        StringBuilder cps = new StringBuilder();
+        title.codePoints().forEach(c -> cps.append(String.format("U+%04X ", c)));
+        org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger("hugoprices");
+        log.info("[HP-DEBUG] title='{}' codepoints={} mode={}", title, cps.toString().trim(),
+                ModeDetector.detect(title, settings));
+        int n = 0;
+        for (Slot slot : screen.getMenu().slots) {
+            if (slot.container instanceof Inventory || slot.getItem().isEmpty()) {
+                continue;
+            }
+            ItemStack st = slot.getItem();
+            log.info("[HP-DEBUG] slot {} item={} x{} lore={} found={}", slot.index,
+                    BuiltInRegistries.ITEM.getKey(st.getItem()), st.getCount(), loreOf(st),
+                    PriceExtractor.extract(loreOf(st), settings));
+            if (++n >= 6) {
+                break;
+            }
+        }
     }
 
     private static void scan(AbstractContainerScreen<?> screen) {
